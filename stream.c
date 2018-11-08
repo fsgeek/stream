@@ -176,9 +176,17 @@
 #define STREAM_TYPE double
 #endif
 
+#if 0
 static STREAM_TYPE	a[STREAM_ARRAY_SIZE+OFFSET],
 			b[STREAM_ARRAY_SIZE+OFFSET],
 			c[STREAM_ARRAY_SIZE+OFFSET];
+#else
+static STREAM_TYPE a_default[STREAM_ARRAY_SIZE+OFFSET];
+static STREAM_TYPE b_default[STREAM_ARRAY_SIZE+OFFSET];
+static STREAM_TYPE c_default[STREAM_ARRAY_SIZE+OFFSET];
+
+static STREAM_TYPE *a = a_default, *b = b_default, *c = c_default;
+#endif // 0
 
 static double	avgtime[4] = {0}, maxtime[4] = {0},
 		mintime[4] = {FLT_MAX,FLT_MAX,FLT_MAX,FLT_MAX};
