@@ -46,6 +46,14 @@
 # include <float.h>
 # include <limits.h>
 # include <sys/time.h>
+# include <errno.h>
+# include <sys/types.h>
+# include <sys/stat.h>
+# include <fcntl.h>
+# include <string.h>
+# include <sys/mman.h>
+# include <stdint.h>
+
 
 /*-----------------------------------------------------------------------
  * INSTRUCTIONS:
@@ -213,7 +221,7 @@ extern void tuned_STREAM_Triad(STREAM_TYPE scalar);
 extern int omp_get_num_threads();
 #endif
 int
-main()
+main(int argc, const char *argv[])
     {
     int			quantum, checktick();
     int			BytesPerWord;
@@ -221,11 +229,74 @@ main()
     ssize_t		j;
     STREAM_TYPE		scalar;
     double		t, times[4][NTIMES];
+	int			fd = -1;
+	void 		*mem = NULL;
+	size_t 		file_size;
+
+	/* alternate memory source? */
+	size_t region_size = (STREAM_ARRAY_SIZE+OFFSET) * sizeof(STREAM_TYPE);
+	size_t rounded_region_size = (region_size + 0x1FFFFF) & ~0x1FFFFF;
+	int status = 0;
+
+	file_size = rounded_region_size * 3;
+
+	while (NULL == mem) {
+
+		if (argc > 1) {
+			(void) unlink(argv[1]);
+			fd = open(argv[1], O_CREAT | O_RDWR | O_EXCL, 0600);
+			if (fd < 0) {
+				fprintf(stderr, "attempt to create temp file in %s failed (%d - %s)\n", argv[1], errno, strerror(errno));
+				status = -1;
+				break;
+			}
+			if (posix_fallocate(fd, 0, file_size) < 0) {
+				perror("fallocate");
+				status = -1;
+				break;
+			}
+		}
+
+		if (fd >= 0) {
+			mem = mmap(NULL, file_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+		}
+		else {
+			mem = mmap(NULL, file_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, fd, 0);
+		}
+		if (NULL == mem) {
+			perror("mmap");
+			status = -1;
+			break;
+		}
+
+		memset(mem, 0, file_size);
+
+		// at this point we don't need the file to remain open _or_ named
+		if (fd >= 0) {
+			close(fd);
+			fd = -1;
+		}
+
+		if (argc > 0) {
+			unlink(argv[1]);
+		}
+
+		a = (STREAM_TYPE *)mem;
+		b = (STREAM_TYPE *)(((uintptr_t)mem) + rounded_region_size);
+		c = (STREAM_TYPE *)(((uintptr_t)b) + rounded_region_size);
+
+		break;
+	}
+
+	if (0 != status) {
+		return status;
+	}
 
     /* --- SETUP --- determine precision and check timing --- */
 
     printf(HLINE);
     printf("STREAM version $Revision: 5.10 $\n");
+	printf("Modified by fsgeek to use mapped files for memory (permits testing PMEM via DAX)\n");
     printf(HLINE);
     BytesPerWord = sizeof(STREAM_TYPE);
     printf("This system uses %d bytes per array element.\n",
@@ -382,6 +453,16 @@ main()
     /* --- Check Results --- */
     checkSTREAMresults();
     printf(HLINE);
+
+	// cleanup
+	if (NULL != mem) {
+		(void) munmap(mem, file_size);
+		mem = NULL;
+	}
+
+	if (argc > 1) {
+		(void) unlink(argv[1]);
+	}
 
     return 0;
 }
