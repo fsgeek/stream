@@ -1,10 +1,10 @@
 CC = gcc
-CFLAGS = -O2
+CFLAGS = -O2 
 
 FF = g77
 FFLAGS = -O2
 
-all: stream_f.exe stream_c.exe
+all: stream_c.exe stream_c_omp.exe
 
 stream_f.exe: stream.f mysecond.o
 	$(CC) $(CFLAGS) -c mysecond.c
@@ -13,6 +13,9 @@ stream_f.exe: stream.f mysecond.o
 
 stream_c.exe: stream.c
 	$(CC) $(CFLAGS) stream.c -o stream_c.exe
+
+stream_c_omp.exe: stream.c
+	$(CC) $(CFLAGS) -fopenmp stream.c -o stream_c_omp.exe
 
 clean:
 	rm -f stream_f.exe stream_c.exe *.o
